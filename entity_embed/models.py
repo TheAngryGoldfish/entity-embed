@@ -65,6 +65,51 @@ class SemanticEmbedNet(nn.Module):
     def forward(self, x, **kwargs):
         return self.dense_net(x)
 
+class ImageEmbedNet(nn.Module):
+    def __init__(self, field_config, embedding_size):
+        super().__init__()
+        self.embedding_size = embedding_size
+
+        # self.conv1 = nn.Conv2d(
+        #     in_channels=3,
+        #     out_channels=8,
+        #     kernel_size=3,
+        #     stride=1,
+        #     padding=1,
+        # )
+        # self.conv2 = nn.Conv2d(
+        #     in_channels=8,
+        #     out_channels=8,
+        #     kernel_size=3,
+        #     stride=3,
+        #     padding=1,
+        # )
+        self.conv1 = nn.Conv2d(
+          in_channels=3,
+          out_channels=6,
+          kernel_size=5,
+          padding=2
+        )
+        self.pool = nn.MaxPool2d(
+          kernel_size=2,
+          stride=2
+        )
+        self.conv2 = nn.Conv2d(
+          in_channels=6,
+          out_channels=16,
+          kernel_size=5,
+          padding=2
+        )
+        # input to fc layer is [64,16,16,16], flattens to [64,4096]
+        self.fc = nn.Linear(4096, self.embedding_size)
+
+    def forward(self, x, **kwargs):
+        # batch is 64, so [64,3,64,64]
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = self.fc(x)
+        return x
 
 class MaskedAttention(nn.Module):
     """
@@ -226,6 +271,11 @@ class FieldsEmbedNet(nn.Module):
                     field_config=field_config,
                     embedding_size=embedding_size,
                 )
+            elif field_config.field_type is FieldType.IMAGE:
+                embed_net = ImageEmbedNet(
+                    field_config=field_config,
+                    embedding_size=embedding_size,
+                )
             else:
                 raise ValueError(f"Unexpected field_config.field_type={field_config.field_type}")
 
@@ -241,6 +291,8 @@ class FieldsEmbedNet(nn.Module):
                 FieldType.STRING,
                 FieldType.SEMANTIC_STRING,
             ):
+                self.embed_net_dict[field] = embed_net
+            elif field_config.field_type is FieldType.IMAGE:
                 self.embed_net_dict[field] = embed_net
 
     def forward(self, tensor_dict, sequence_length_dict):
