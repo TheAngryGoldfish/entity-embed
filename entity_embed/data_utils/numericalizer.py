@@ -8,6 +8,7 @@ import numpy as np
 import regex
 import torch
 from torchtext.vocab import Vocab
+import cv2 as cv
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class FieldType(Enum):
     MULTITOKEN = "multitoken"
     SEMANTIC_STRING = "semantic_string"
     SEMANTIC_MULTITOKEN = "semantic_multitoken"
+    IMAGE = 'image'
 
 
 @dataclass
@@ -153,6 +155,35 @@ class SemanticMultitokenNumericalizer(MultitokenNumericalizer):
             field=field, field_config=field_config
         )
 
+class ImageNumericalizer:
+
+    def __init__(self, field, field_config):
+        self.field = field
+        self.path = field_config.path
+
+    def build_tensor(self, val):
+        try:
+          # # book covers =====================================================
+          # path = val.split("/")
+          # val = path[-2]+'/'+path[-1]
+          # img = cv.resize(cv.imread("/content/drive/MyDrive/8803 Project/data with id/book-covers/"+val), (64,64), interpolation = cv.INTER_AREA)/255
+          # # shopee ==========================================================
+          # img = cv.resize(cv.imread("/content/drive/MyDrive/8803 Project/data with id/train_images/"+val), (64,64), interpolation = cv.INTER_AREA)/255
+          # # facematcher =====================================================
+          # path = val.split("face-matcher")
+          # val = path[-2]+'/'+path[-1]
+          # img = cv.resize(cv.imread("/content/drive/MyDrive/8803 Project/data with id/trainset/"+val), (64,64), interpolation = cv.INTER_AREA)/255
+          # general =========================================================
+          img = cv.resize(cv.imread(self.path+val), (64,64), interpolation = cv.INTER_AREA)/255
+
+
+          img = np.transpose(img,[2,1,0])
+          img = torch.from_numpy(img)#.float()
+        except:
+          img = torch.rand((3,64,64))
+
+        return img, 1
+
 
 class RecordNumericalizer:
     def __init__(
@@ -171,6 +202,7 @@ class RecordNumericalizer:
             # Get the key from the FieldConfig object for the
             # cases where the field is different from the record's key
             key = self.field_config_dict[field].key
+            # print(key, record[key],field, numericalizer)
             t, sequence_length = numericalizer.build_tensor(record[key])
             tensor_dict[field] = t
             sequence_length_dict[field] = sequence_length
